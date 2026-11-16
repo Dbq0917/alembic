@@ -41,5 +41,9 @@ TARGET_LINK_LIBRARIES(AlembicOgawaArchive_Test Alembic Alembic)
 ADD_EXECUTABLE(AlembicOgawaSimple_Test SimpleTest.cpp)
 TARGET_LINK_LIBRARIES(AlembicOgawaSimple_Test Alembic Alembic)
 
+ADD_EXECUTABLE(AlembicOgawaIncremental_Test IncrementalTest.cpp)
+TARGET_LINK_LIBRARIES(AlembicOgawaIncremental_Test Alembic Alembic)
+
 ADD_TEST(AlembicOgawaArchive_TEST AlembicOgawaArchive_Test)
 ADD_TEST(AlembicOgawaSimple_TEST AlembicOgawaSimple_Test)
+ADD_TEST(AlembicOgawaIncremental_TEST AlembicOgawaIncremental_Test)

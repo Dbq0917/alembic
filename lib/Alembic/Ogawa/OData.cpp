@@ -37,6 +37,9 @@
 #include <Alembic/Ogawa/OData.h>
 #include <Alembic/Ogawa/OStream.h>
 
+#include <cstring>
+#include <vector>
+
 namespace Alembic {
 namespace Ogawa {
 namespace ALEMBIC_VERSION_NS {
@@ -50,12 +53,24 @@ public:
     {
         pos = 0;
         size = 0;
+        staged = false;
     }
 
     PrivateData(OStreamPtr iStream,
                 Alembic::Util::uint64_t iPos,
                 Alembic::Util::uint64_t iSize) :
-        stream(iStream), pos(iPos), size(iSize) {}
+        stream(iStream), pos(iPos), size(iSize), staged(false) {}
+
+    PrivateData(Alembic::Util::uint64_t iSize, const void * iData) :
+        pos(0), size(iSize), staged(true)
+    {
+        stagedData.resize(static_cast< std::size_t >( iSize ) );
+        if ( iSize > 0 && iData )
+        {
+            std::memcpy( &( stagedData.front() ), iData,
+                         static_cast< std::size_t >( iSize ) );
+        }
+    }
 
     ~PrivateData() {}
 
@@ -63,6 +78,8 @@ public:
 
     Alembic::Util::uint64_t pos;
     Alembic::Util::uint64_t size;
+    bool staged;
+    std::vector< char > stagedData;
 };
 
 OData::OData() : mData(new OData::PrivateData())
@@ -73,6 +90,11 @@ OData::OData(OStreamPtr iStream,
              Alembic::Util::uint64_t iPos,
              Alembic::Util::uint64_t iSize)
     : mData(new OData::PrivateData(iStream, iPos, iSize))
+{
+}
+
+OData::OData(Alembic::Util::uint64_t iSize, const void * iData)
+    : mData(new OData::PrivateData(iSize, iData))
 {
 }
 
@@ -89,6 +111,15 @@ void OData::rewrite(Alembic::Util::uint64_t iSize, void * iData,
     if (!mData->stream || iSize == 0 || mData->size == 0 ||
         iOffset + iSize > mData->size)
     {
+        if ( !mData->staged || iSize == 0 || mData->size == 0 ||
+             iOffset + iSize > mData->size )
+        {
+            return;
+        }
+
+        std::memcpy( &( mData->stagedData[
+                           static_cast< std::size_t >( iOffset )] ),
+                     iData, static_cast< std::size_t >( iSize ) );
         return;
     }
 
@@ -105,6 +136,22 @@ Alembic::Util::uint64_t OData::getSize() const
 Alembic::Util::uint64_t OData::getPos() const
 {
     return mData->pos;
+}
+
+void OData::setPos(Alembic::Util::uint64_t iPos)
+{
+    mData->pos = iPos;
+    mData->staged = false;
+}
+
+bool OData::isStaged() const
+{
+    return mData->staged;
+}
+
+const void * OData::getStagedData() const
+{
+    return mData->stagedData.empty() ? NULL : &( mData->stagedData.front() );
 }
 
 } // End namespace ALEMBIC_VERSION_NS

@@ -46,5 +46,6 @@
 #include <Alembic/Ogawa/OData.h>
 #include <Alembic/Ogawa/OGroup.h>
 #include <Alembic/Ogawa/OStream.h>
+#include <Alembic/Ogawa/Validator.h>
 
 #endif

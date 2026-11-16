@@ -47,6 +47,9 @@ namespace ALEMBIC_VERSION_NS {
 
 class OGroup;
 typedef Alembic::Util::shared_ptr< OGroup > OGroupPtr;
+class IncrementalContext;
+typedef Alembic::Util::shared_ptr< IncrementalContext >
+    IncrementalContextPtr;
 
 class ALEMBIC_EXPORT OGroup
     : public Alembic::Util::enable_shared_from_this< OGroup >
@@ -84,6 +87,10 @@ public:
 
     // reference an existing group
     void addGroup(OGroupPtr iGroup);
+
+    // get an existing child group for update.  This is only supported for
+    // archives opened in append mode.
+    OGroupPtr getGroup(Alembic::Util::uint64_t iIndex);
 
     // convenience function for adding a default NULL group
     void addEmptyGroup();
@@ -123,6 +130,12 @@ private:
     OGroup(OStreamPtr iStream);
 
     OGroup(OGroupPtr iParent, Alembic::Util::uint64_t iIndex);
+
+    OGroup(IncrementalContextPtr iContext,
+           Alembic::Util::uint64_t iSourceRef,
+           const std::vector< Alembic::Util::uint64_t > & iPath);
+
+    void loadIncrementalChildren(Alembic::Util::uint64_t iSourceRef);
 
     class PrivateData;
     Alembic::Util::unique_ptr< PrivateData > mData;

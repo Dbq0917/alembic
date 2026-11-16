@@ -37,6 +37,7 @@
 #include <Alembic/Ogawa/IGroup.h>
 #include <Alembic/Ogawa/IData.h>
 #include <Alembic/Ogawa/IStreams.h>
+#include <Alembic/Ogawa/IncrementalFormat.h>
 
 namespace Alembic {
 namespace Ogawa {
@@ -48,6 +49,7 @@ public:
     PrivateData(IStreamsPtr iStreams)
     {
         streams = iStreams;
+        checksummed = false;
     };
 
     ~PrivateData() {};
@@ -57,6 +59,7 @@ public:
     // set after freeze
     Alembic::Util::uint64_t pos;
     Alembic::Util::uint64_t size;
+    bool checksummed;
 };
 
 IData::~IData()
@@ -72,7 +75,8 @@ IData::IData(IStreamsPtr iStreams,
     mData->size = 0;
 
     // strip off the top bit (indicates data) to get our seek position
-    mData->pos = iPos & INVALID_GROUP;
+    mData->checksummed = ( iPos & OGAWA_V2_RECORD_FLAG ) != 0;
+    mData->pos = iPos & OGAWA_V2_REF_MASK;
 
     Alembic::Util::uint64_t size = 0;
 
@@ -80,7 +84,9 @@ IData::IData(IStreamsPtr iStreams,
     if ( mData->pos != 0 )
     {
         mData->streams->read(iThreadId, mData->pos, 8, &size);
-        if (mData->streams->getSize() < size)
+        Alembic::Util::uint64_t overhead = mData->checksummed ? 8 : 0;
+        if (mData->streams->getCommittedSize() <
+               mData->pos + 8 + size + overhead)
         {
             throw std::runtime_error("Ogawa IData illegal size.");
         }
@@ -112,6 +118,11 @@ Alembic::Util::uint64_t IData::getSize() const
 Alembic::Util::uint64_t IData::getPos() const
 {
     return mData->pos;
+}
+
+bool IData::isChecksummed() const
+{
+    return mData->checksummed;
 }
 
 } // End namespace ALEMBIC_VERSION_NS

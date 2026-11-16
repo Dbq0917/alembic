@@ -34,6 +34,8 @@
 ##-*****************************************************************************
 
 LIST(APPEND CXX_FILES
+    Ogawa/IncrementalContext.cpp
+    Ogawa/IncrementalFormat.cpp
     Ogawa/IArchive.cpp
     Ogawa/IData.cpp
     Ogawa/IGroup.cpp
@@ -42,6 +44,7 @@ LIST(APPEND CXX_FILES
     Ogawa/OData.cpp
     Ogawa/OGroup.cpp
     Ogawa/OStream.cpp
+    Ogawa/Validator.cpp
 )
 SET(CXX_FILES "${CXX_FILES}" PARENT_SCOPE)
 

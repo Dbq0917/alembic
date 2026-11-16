@@ -56,9 +56,13 @@ public:
 
     bool isValid();
     bool isFrozen();
+    bool wasRecovered();
     Alembic::Util::uint16_t getVersion();
 
     Alembic::Util::uint64_t getSize();
+    Alembic::Util::uint64_t getCommittedSize();
+    Alembic::Util::uint64_t getGroupPos();
+    const std::string & getError() const;
 
     // locks on the threadId, seeks to iPos, and reads iSize bytes into oBuf
     void read(std::size_t iThreadId, Alembic::Util::uint64_t iPos,

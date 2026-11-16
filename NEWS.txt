@@ -1,3 +1,12 @@
+Unreleased
+
+AbcCoreOgawa / Ogawa:
+
+Add a v2 append-only commit layer for incremental archive updates. Existing
+full writes remain v1-compatible. Incremental files use copy-on-write groups,
+checksummed records, crash-safe A/B commit slots, startup recovery, and the
+abcvalidate integrity checker.
+
 2026-7-1, Alembic 1.8.12
 Thanks to your submitted issues and pull requests we have a few bug 
 fixes and build enhancements.

@@ -59,6 +59,8 @@ public:
     // Ogawa utilities to detect when this IData is shared
     Alembic::Util::uint64_t getPos() const;
 
+    bool isChecksummed() const;
+
 private:
     friend class IGroup;
     IData(IStreamsPtr iStreams, Alembic::Util::uint64_t iPos,

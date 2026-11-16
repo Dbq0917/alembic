@@ -67,6 +67,11 @@ public:
     bool isEmptyChildData(Alembic::Util::uint64_t iIndex) const;
 
     bool isLight() const;
+    bool isChecksummed() const;
+
+    Alembic::Util::uint64_t getChildRef(
+        Alembic::Util::uint64_t iIndex,
+        std::size_t iThreadIndex) const;
 
 private:
     friend class IArchive;

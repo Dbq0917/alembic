@@ -64,10 +64,15 @@ public:
 
 private:
     friend class OGroup; // friend so we can call the constructor below
+    friend class IncrementalContext;
     OData(OStreamPtr iStream, Alembic::Util::uint64_t iPos,
           Alembic::Util::uint64_t iSize);
+    OData(Alembic::Util::uint64_t iSize, const void * iData);
 
     Alembic::Util::uint64_t getPos() const;
+    void setPos(Alembic::Util::uint64_t iPos);
+    bool isStaged() const;
+    const void * getStagedData() const;
 
     class PrivateData;
     Alembic::Util::unique_ptr< PrivateData > mData;

@@ -59,8 +59,11 @@ public:
     bool isValid() const;
 
     bool isFrozen() const;
+    bool wasRecovered() const;
 
     Alembic::Util::uint16_t getVersion() const;
+
+    const std::string & getError() const;
 
     IGroupPtr getGroup() const;
 

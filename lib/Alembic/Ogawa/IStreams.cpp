@@ -34,6 +34,7 @@
 //-*****************************************************************************
 
 #include <Alembic/Ogawa/IStreams.h>
+#include <Alembic/Ogawa/IncrementalFormat.h>
 #include <fstream>
 #include <stdexcept>
 
@@ -658,8 +659,11 @@ public:
     {
         valid = false;
         frozen = false;
+        recovered = false;
         version = 0;
         size = 0;
+        committedSize = 0;
+        groupPos = 0;
     }
 
     void init(IStreamReaderPtr iReader, size_t iNumStreams)
@@ -697,8 +701,11 @@ public:
                 return;
             }
             bool filefrozen = (header[5] == char(0xff));
-            Alembic::Util::uint16_t topvers = header[6];
-            Alembic::Util::uint16_t fileversion = (topvers << 8) | header[7];
+            Alembic::Util::uint16_t topvers =
+                static_cast< unsigned char >( header[6] );
+            Alembic::Util::uint16_t fileversion =
+                (topvers << 8) |
+                static_cast< unsigned char >( header[7] );
             Alembic::Util::uint64_t groupPos = *((Alembic::Util::uint64_t*) (&(header[8])));
             Alembic::Util::uint64_t filesize = iReader->size();
 
@@ -724,6 +731,49 @@ public:
         if (version == 1)
         {
             reader = iReader;        // preserve the reader
+            committedSize = size;
+            groupPos = firstGroupPos;
+            recovered = !frozen;
+            valid = true;
+        }
+        else if ( version == OGAWA_V2_VERSION )
+        {
+            ReadAtFn readAt = [iReader]( Alembic::Util::uint64_t iPos,
+                                         Alembic::Util::uint64_t iSize,
+                                         void * oBuf )
+            {
+                return iReader->read( 0, iPos, iSize, oBuf );
+            };
+
+            OgawaV2Control control;
+            std::string error;
+            if ( !ReadOgawaV2Control( readAt, size, firstGroupPos,
+                                      control, error ) )
+            {
+                this->error = error;
+                frozen = false;
+                valid = false;
+                version = 0;
+                return;
+            }
+
+            const OgawaV2Slot & slot =
+                control.slots[control.selectedSlot];
+            if ( !ValidateV2GroupRecord( readAt, slot.root,
+                                         slot.committedEnd, error ) )
+            {
+                this->error = error;
+                frozen = false;
+                valid = false;
+                version = 0;
+                return;
+            }
+
+            reader = iReader;
+            groupPos = slot.root;
+            committedSize = slot.committedEnd;
+            recovered = !frozen || size != slot.committedEnd;
+            frozen = true;
             valid = true;
         }
     }
@@ -731,8 +781,12 @@ public:
 
     bool valid;
     bool frozen;
+    bool recovered;
     Alembic::Util::uint16_t version;
     Alembic::Util::uint64_t size;
+    Alembic::Util::uint64_t committedSize;
+    Alembic::Util::uint64_t groupPos;
+    std::string error;
 
     IStreamReaderPtr reader;
 };
@@ -767,6 +821,11 @@ bool IStreams::isFrozen()
     return mData->frozen;
 }
 
+bool IStreams::wasRecovered()
+{
+    return mData->recovered;
+}
+
 Alembic::Util::uint16_t IStreams::getVersion()
 {
     return mData->version;
@@ -775,6 +834,21 @@ Alembic::Util::uint16_t IStreams::getVersion()
 Alembic::Util::uint64_t IStreams::getSize()
 {
     return mData->size;
+}
+
+Alembic::Util::uint64_t IStreams::getCommittedSize()
+{
+    return mData->committedSize;
+}
+
+Alembic::Util::uint64_t IStreams::getGroupPos()
+{
+    return mData->groupPos;
+}
+
+const std::string & IStreams::getError() const
+{
+    return mData->error;
 }
 
 void IStreams::read(std::size_t iThreadId, Alembic::Util::uint64_t iPos,

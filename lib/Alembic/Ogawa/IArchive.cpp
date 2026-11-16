@@ -57,8 +57,7 @@ void IArchive::init()
 {
     if (mStreams->isValid())
     {
-        Alembic::Util::uint64_t pos = 0;
-        mStreams->read(0, 8, 8, &pos);
+        Alembic::Util::uint64_t pos = mStreams->getGroupPos();
         mGroup.reset(new IGroup(mStreams, pos, false, 0));
     }
 }
@@ -77,9 +76,19 @@ bool IArchive::isFrozen() const
     return mStreams->isFrozen();
 }
 
+bool IArchive::wasRecovered() const
+{
+    return mStreams->wasRecovered();
+}
+
 Alembic::Util::uint16_t IArchive::getVersion() const
 {
     return mStreams->getVersion();
+}
+
+const std::string & IArchive::getError() const
+{
+    return mStreams->getError();
 }
 
 IGroupPtr IArchive::getGroup() const

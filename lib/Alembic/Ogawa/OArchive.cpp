@@ -36,6 +36,9 @@
 #include <Alembic/Ogawa/OArchive.h>
 #include <Alembic/Ogawa/OStream.h>
 #include <Alembic/Ogawa/OGroup.h>
+#include <Alembic/Ogawa/IncrementalContext.h>
+
+#include <stdexcept>
 
 namespace Alembic {
 namespace Ogawa {
@@ -47,6 +50,30 @@ OArchive::OArchive(const std::string & iFileName) :
     mGroup.reset(new OGroup(mStream));
 }
 
+OArchive::OArchive(const std::string & iFileName, OpenMode iMode)
+{
+    if ( iMode == kTruncate )
+    {
+        mStream.reset( new OStream( iFileName ) );
+        mGroup.reset( new OGroup( mStream ) );
+        return;
+    }
+
+    try
+    {
+        mIncremental = IncrementalContext::open( iFileName );
+        mGroup.reset( new OGroup( mIncremental,
+                                  mIncremental->getRootRef(),
+                                  std::vector< Alembic::Util::uint64_t >() ) );
+    }
+    catch ( const std::exception & e )
+    {
+        mError = e.what();
+        mIncremental.reset();
+        mGroup.reset();
+    }
+}
+
 OArchive::OArchive(std::ostream * iStream) :
     mStream(new OStream(iStream)), mGroup(new OGroup(mStream))
 {
@@ -54,16 +81,63 @@ OArchive::OArchive(std::ostream * iStream) :
 
 OArchive::~OArchive()
 {
+    if ( mIncremental && mIncremental->hasChanges() )
+    {
+        std::string error;
+        mIncremental->commit( error );
+    }
 }
 
 bool OArchive::isValid()
 {
+    if ( mIncremental )
+    {
+        return mIncremental->isValid();
+    }
     return mStream->isValid();
 }
 
 OGroupPtr OArchive::getGroup()
 {
     return mGroup;
+}
+
+bool OArchive::commit()
+{
+    if ( !mIncremental )
+    {
+        mError = "Archive is not open in incremental mode.";
+        return false;
+    }
+    return mIncremental->commit( mError );
+}
+
+bool OArchive::hasPendingChanges() const
+{
+    return mIncremental && mIncremental->hasChanges();
+}
+
+bool OArchive::isIncremental() const
+{
+    return static_cast< bool >( mIncremental );
+}
+
+bool OArchive::wasRecovered() const
+{
+    return mIncremental && mIncremental->wasRecovered();
+}
+
+const std::string & OArchive::getError() const
+{
+    if ( !mError.empty() )
+    {
+        return mError;
+    }
+    if ( mIncremental )
+    {
+        return mIncremental->getError();
+    }
+    return mError;
 }
 
 } // End namespace ALEMBIC_VERSION_NS

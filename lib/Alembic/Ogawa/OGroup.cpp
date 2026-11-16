@@ -37,6 +37,11 @@
 #include <Alembic/Ogawa/OArchive.h>
 #include <Alembic/Ogawa/OData.h>
 #include <Alembic/Ogawa/OStream.h>
+#include <Alembic/Ogawa/IncrementalContext.h>
+#include <Alembic/Ogawa/IncrementalFormat.h>
+
+#include <map>
+#include <stdexcept>
 
 namespace Alembic {
 namespace Ogawa {
@@ -59,6 +64,12 @@ public:
     // used before and after freeze
     std::vector<Alembic::Util::uint64_t> childVec;
 
+    std::map< Alembic::Util::uint64_t,
+              Alembic::Util::weak_ptr< OGroup > > childGroups;
+
+    IncrementalContextPtr incremental;
+    std::vector< Alembic::Util::uint64_t > path;
+
     // set after freeze
     Alembic::Util::uint64_t pos;
 };
@@ -69,6 +80,9 @@ OGroup::OGroup(OGroupPtr iParent, Alembic::Util::uint64_t iIndex)
     mData->stream = iParent->mData->stream;
     mData->parents.push_back( ParentPair(iParent, iIndex) );
     mData->pos = INVALID_GROUP;
+    mData->incremental = iParent->mData->incremental;
+    mData->path = iParent->mData->path;
+    mData->path.push_back( iIndex );
 }
 
 OGroup::OGroup(OStreamPtr iStream)
@@ -79,6 +93,27 @@ OGroup::OGroup(OStreamPtr iStream)
     mData->pos = INVALID_GROUP;
 }
 
+OGroup::OGroup(IncrementalContextPtr iContext,
+               Alembic::Util::uint64_t iSourceRef,
+               const std::vector< Alembic::Util::uint64_t > & iPath)
+    : mData(new OGroup::PrivateData())
+{
+    mData->incremental = iContext;
+    mData->path = iPath;
+    mData->pos = INVALID_GROUP;
+    loadIncrementalChildren( iSourceRef );
+}
+
+void OGroup::loadIncrementalChildren(Alembic::Util::uint64_t iSourceRef)
+{
+    std::string error;
+    if ( !mData->incremental->loadGroup( iSourceRef, mData->childVec,
+                                         error ) )
+    {
+        throw std::runtime_error( error );
+    }
+}
+
 OGroup::~OGroup()
 {
     freeze();
@@ -86,17 +121,54 @@ OGroup::~OGroup()
 
 OGroupPtr OGroup::addGroup()
 {
+    if (mData->incremental)
+    {
+        return OGroupPtr();
+    }
+
     OGroupPtr child;
     if (!isFrozen())
     {
         mData->childVec.push_back(0);
         child.reset(new OGroup(shared_from_this(), mData->childVec.size() - 1));
+        mData->childGroups[mData->childVec.size() - 1] = child;
     }
     return child;
 }
 
+OGroupPtr OGroup::getGroup(Alembic::Util::uint64_t iIndex)
+{
+    if ( mData->incremental )
+    {
+        if ( !isChildGroup( iIndex ) )
+        {
+            return OGroupPtr();
+        }
+
+        std::vector< Alembic::Util::uint64_t > childPath = mData->path;
+        childPath.push_back( iIndex );
+        return OGroupPtr( new OGroup( mData->incremental,
+                                      mData->childVec[iIndex],
+                                      childPath ) );
+    }
+
+    std::map< Alembic::Util::uint64_t,
+              Alembic::Util::weak_ptr< OGroup > >::iterator found =
+        mData->childGroups.find( iIndex );
+    if ( found != mData->childGroups.end() )
+    {
+        return found->second.lock();
+    }
+    return OGroupPtr();
+}
+
 ODataPtr OGroup::createData(Alembic::Util::uint64_t iSize, const void * iData)
 {
+    if (mData->incremental)
+    {
+        return mData->incremental->createData( iSize, iData );
+    }
+
     ODataPtr child;
     if (isFrozen())
     {
@@ -123,6 +195,13 @@ ODataPtr OGroup::createData(Alembic::Util::uint64_t iSize, const void * iData)
 
 ODataPtr OGroup::addData(Alembic::Util::uint64_t iSize, const void * iData)
 {
+    if ( mData->incremental )
+    {
+        ODataPtr child = mData->incremental->createData( iSize, iData );
+        addData( child );
+        return child;
+    }
+
     ODataPtr child = OGroup::createData(iSize, iData);
     if (child)
     {
@@ -137,6 +216,30 @@ ODataPtr OGroup::createData(Alembic::Util::uint64_t iNumData,
                             const Alembic::Util::uint64_t * iSizes,
                             const void ** iDatas)
 {
+    if (mData->incremental)
+    {
+        Alembic::Util::uint64_t totalSize = 0;
+        for (Alembic::Util::uint64_t i = 0; i < iNumData; ++i)
+        {
+            totalSize += iSizes[i];
+        }
+
+        std::vector< char > data;
+        data.reserve( static_cast< std::size_t >( totalSize ) );
+        for (Alembic::Util::uint64_t i = 0; i < iNumData; ++i)
+        {
+            if ( iSizes[i] != 0 )
+            {
+                const char * src =
+                    static_cast< const char * >( iDatas[i] );
+                data.insert( data.end(), src,
+                             src + static_cast< std::size_t >( iSizes[i] ) );
+            }
+        }
+        return mData->incremental->createData(
+            totalSize, data.empty() ? NULL : &data[0] );
+    }
+
     ODataPtr child;
     if (isFrozen())
     {
@@ -189,6 +292,22 @@ ODataPtr OGroup::addData(Alembic::Util::uint64_t iNumData,
 
 void OGroup::addData(ODataPtr iData)
 {
+    if ( mData->incremental )
+    {
+        mData->incremental->addData( mData->path, mData->childVec.size(),
+                                     iData );
+        if ( iData->getSize() == 0 )
+        {
+            mData->childVec.push_back( EMPTY_DATA );
+        }
+        else
+        {
+            mData->childVec.push_back(
+                OGAWA_V2_DATA_FLAG | OGAWA_V2_RECORD_FLAG );
+        }
+        return;
+    }
+
     if (!isFrozen())
     {
         mData->childVec.push_back(iData->getPos() | 0x8000000000000000ULL);
@@ -197,6 +316,11 @@ void OGroup::addData(ODataPtr iData)
 
 void OGroup::addGroup(OGroupPtr iGroup)
 {
+    if ( mData->incremental )
+    {
+        return;
+    }
+
     if (!isFrozen())
     {
         if (iGroup->isFrozen())
@@ -214,6 +338,11 @@ void OGroup::addGroup(OGroupPtr iGroup)
 
 void OGroup::addEmptyGroup()
 {
+    if ( mData->incremental )
+    {
+        return;
+    }
+
     if (!isFrozen())
     {
         mData->childVec.push_back(EMPTY_GROUP);
@@ -222,6 +351,13 @@ void OGroup::addEmptyGroup()
 
 void OGroup::addEmptyData()
 {
+    if ( mData->incremental )
+    {
+        ODataPtr empty = mData->incremental->createData( 0, NULL );
+        addData( empty );
+        return;
+    }
+
     if (!isFrozen())
     {
         mData->childVec.push_back(EMPTY_DATA);
@@ -231,6 +367,11 @@ void OGroup::addEmptyData()
 // no more children can be added, commit to the stream
 void OGroup::freeze()
 {
+    if ( mData->incremental )
+    {
+        return;
+    }
+
     // bail if we've already done this work
     if (isFrozen())
     {
@@ -310,6 +451,26 @@ bool OGroup::isChildEmptyData(Alembic::Util::uint64_t iIndex) const
 
 void OGroup::replaceData(Alembic::Util::uint64_t iIndex, ODataPtr iData)
 {
+    if ( mData->incremental )
+    {
+        if ( !isChildData( iIndex ) )
+        {
+            return;
+        }
+
+        mData->incremental->replaceData( mData->path, iIndex, iData );
+        if ( iData->getSize() == 0 )
+        {
+            mData->childVec[iIndex] = EMPTY_DATA;
+        }
+        else
+        {
+            mData->childVec[iIndex] =
+                OGAWA_V2_DATA_FLAG | OGAWA_V2_RECORD_FLAG;
+        }
+        return;
+    }
+
     if (!isChildData(iIndex))
     {
         return;

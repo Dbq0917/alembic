@@ -36,6 +36,7 @@
 #include <Alembic/Ogawa/IGroup.h>
 #include <Alembic/Ogawa/IArchive.h>
 #include <Alembic/Ogawa/IStreams.h>
+#include <Alembic/Ogawa/IncrementalFormat.h>
 
 namespace Alembic {
 namespace Ogawa {
@@ -48,6 +49,7 @@ public:
     {
         numChildren = 0;
         pos = 0;
+        checksummed = false;
         streams = iStreams;
     }
 
@@ -59,6 +61,7 @@ public:
 
     Alembic::Util::uint64_t numChildren;
     Alembic::Util::uint64_t pos;
+    bool checksummed;
 };
 
 IGroup::IGroup(IStreamsPtr iStreams,
@@ -73,11 +76,14 @@ IGroup::IGroup(IStreamsPtr iStreams,
         return;
     }
 
-    mData->pos = iPos;
-    mData->streams->read(iThreadIndex, iPos, 8, &mData->numChildren);
+    mData->checksummed = ( iPos & OGAWA_V2_RECORD_FLAG ) != 0;
+    mData->pos = iPos & OGAWA_V2_REF_MASK;
+    Alembic::Util::uint64_t recordPos = mData->pos;
+    mData->streams->read(iThreadIndex, recordPos, 8, &mData->numChildren);
 
     // make sure we don't have a maliciously bad number of children
-    if ( mData->numChildren > (mData->streams->getSize() / 8) ||
+    if ( mData->numChildren >
+            (mData->streams->getCommittedSize() / 8) ||
          mData->numChildren == 0 )
     {
         mData->numChildren = 0;
@@ -92,8 +98,24 @@ IGroup::IGroup(IStreamsPtr iStreams,
     if (!iLight || mData->numChildren < 9)
     {
         mData->childVec.resize(mData->numChildren);
-        mData->streams->read(iThreadIndex, iPos + 8, mData->numChildren * 8,
+        mData->streams->read(iThreadIndex, recordPos + 8,
+                             mData->numChildren * 8,
                              &(mData->childVec.front()));
+
+        if ( mData->checksummed )
+        {
+            Alembic::Util::uint64_t checksum = 0;
+            mData->streams->read(iThreadIndex,
+                                 recordPos + 8 + mData->numChildren * 8,
+                                 8, &checksum);
+            Alembic::Util::uint64_t expected = HashV2GroupRecord(
+                mData->numChildren, &(mData->childVec.front()) );
+            if ( checksum != expected )
+            {
+                throw std::runtime_error(
+                    "Ogawa v2 group checksum mismatch." );
+            }
+        }
     }
 }
 
@@ -124,8 +146,10 @@ IGroupPtr IGroup::getGroup(Alembic::Util::uint64_t iIndex, bool iLight,
 
     // sanity check that we have a valid group, either an empty one
     // or a non data that has a decent value
+    Alembic::Util::uint64_t childGroupPos =
+        childPos & OGAWA_V2_REF_MASK;
     if (childPos == EMPTY_GROUP || ((childPos & EMPTY_DATA) == 0 &&
-        childPos > 8 && childPos != mData->pos))
+        childGroupPos > 8 && childGroupPos != mData->pos))
     {
         child.reset(new IGroup(mData->streams, childPos, iLight, iThreadIndex));
     }
@@ -192,6 +216,31 @@ bool IGroup::isEmptyChildData(Alembic::Util::uint64_t iIndex) const
 bool IGroup::isLight() const
 {
     return mData->numChildren != 0 && mData->childVec.empty();
+}
+
+bool IGroup::isChecksummed() const
+{
+    return mData->checksummed;
+}
+
+Alembic::Util::uint64_t IGroup::getChildRef(
+    Alembic::Util::uint64_t iIndex,
+    std::size_t iThreadIndex) const
+{
+    if ( iIndex >= mData->numChildren )
+    {
+        return 0;
+    }
+
+    if ( isLight() )
+    {
+        Alembic::Util::uint64_t childPos = 0;
+        mData->streams->read(iThreadIndex, mData->pos + 8 * iIndex + 8, 8,
+                             &childPos);
+        return childPos;
+    }
+
+    return mData->childVec[static_cast< std::size_t >( iIndex )];
 }
 
 } // End namespace ALEMBIC_VERSION_NS

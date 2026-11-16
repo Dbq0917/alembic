@@ -45,10 +45,19 @@ namespace Alembic {
 namespace Ogawa {
 namespace ALEMBIC_VERSION_NS {
 
+class IncrementalContext;
+
 class ALEMBIC_EXPORT OArchive
 {
 public:
+    enum OpenMode
+    {
+        kTruncate,
+        kAppend
+    };
+
     OArchive(const std::string & iFileName);
+    OArchive(const std::string & iFileName, OpenMode iMode);
     OArchive(std::ostream * iStream);
     ~OArchive();
 
@@ -56,9 +65,19 @@ public:
 
     bool isValid();
 
+    // Commit all pending changes.  In kAppend mode this writes only changed
+    // data plus copy-on-write metadata and atomically publishes a new root.
+    bool commit();
+    bool hasPendingChanges() const;
+    bool isIncremental() const;
+    bool wasRecovered() const;
+    const std::string & getError() const;
+
 private:
     OStreamPtr mStream;
     OGroupPtr mGroup;
+    Alembic::Util::shared_ptr< IncrementalContext > mIncremental;
+    std::string mError;
 };
 
 typedef Alembic::Util::shared_ptr< OArchive > OArchivePtr;
