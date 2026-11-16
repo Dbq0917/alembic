@@ -39,6 +39,8 @@
 
 #include <Foundation.h>
 
+#include <PyNameUtils.h>
+
 template <class IGEOMPARAM>
 static void register_( const char* iName )
 {
@@ -85,8 +87,7 @@ static void register_( const char* iName )
         .def( "getTimeSampling",
               &IGEOMPARAM::getTimeSampling )
         .def( "getName",
-              &IGEOMPARAM::getName,
-              return_value_policy<copy_const_reference>() )
+              &getNameToPython<IGEOMPARAM> )
         .def( "getParent",
               &IGEOMPARAM::getParent,
               with_custodian_and_ward_postcall<0,1>() )

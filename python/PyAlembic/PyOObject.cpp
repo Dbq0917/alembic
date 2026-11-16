@@ -36,7 +36,21 @@
 
 #include <Foundation.h>
 
+#include <PyNameUtils.h>
+
 using namespace boost::python;
+
+//-*****************************************************************************
+static object getNameAsObject( const Abc::OObject &o )
+{
+    return nameToPython( o.getName() );
+}
+
+//-*****************************************************************************
+static object getFullNameAsObject( const Abc::OObject &o )
+{
+    return nameToPython( o.getFullName() );
+}
 
 //-*****************************************************************************
 static Abc::OObject getChildByIndex( Abc::OObject &o, size_t i )
@@ -107,15 +121,13 @@ void register_oobject()
               "Return the header of this object",
               return_internal_reference<>() )
         .def( "getName",
-              &Abc::OObject::getName,
+              &getNameAsObject,
               "Return the name of this object. The name is unique amongst "
-              "their siblings",
-              return_value_policy<copy_const_reference>() )
+              "their siblings" )
         .def( "getFullName",
-              &Abc::OObject::getFullName,
+              &getFullNameAsObject,
               "Return the full name of this object. The full name is unique "
-              "within the entire archive",
-              return_value_policy<copy_const_reference>() )
+              "within the entire archive" )
         .def( "getNumChildren",
               &Abc::OObject::getNumChildren,
               "Return the number of child OObjects that this object has\n"
@@ -163,8 +175,7 @@ void register_oobject()
               return_internal_reference<>() )
         .def( "valid", &Abc::OObject::valid )
         .def( "reset", &Abc::OObject::reset )
-        .def( "__str__", &Abc::OObject::getFullName,
-              return_value_policy<copy_const_reference>() )
+        .def( "__str__", &getFullNameAsObject )
         .def( ALEMBIC_PYTHON_BOOL_NAME, &Abc::OObject::valid )
         ;
 }

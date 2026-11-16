@@ -35,6 +35,8 @@
 
 #include <boost/python.hpp>
 
+#include <PyNameUtils.h>
+
 using namespace boost::python;
 
 // forwards
@@ -118,6 +120,10 @@ BOOST_PYTHON_MODULE( alembic )
 
     handle<> imath( PyImport_ImportModule( "imath" ) );
     if( PyErr_Occurred() ) throw_error_already_set();
+
+    // Tolerant, reversible (PEP 383 surrogateescape) conversion for the
+    // byte strings stored in archives, see PyNameUtils.h
+    registerNameConverters();
 
     register_typedarraysampleconverters();
 

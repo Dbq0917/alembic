@@ -36,7 +36,21 @@
 
 #include <Foundation.h>
 
+#include <PyNameUtils.h>
+
 using namespace boost::python;
+
+//-*****************************************************************************
+static object getNameAsObject( const Abc::IObject &o )
+{
+    return nameToPython( o.getName() );
+}
+
+//-*****************************************************************************
+static object getFullNameAsObject( const Abc::IObject &o )
+{
+    return nameToPython( o.getFullName() );
+}
 
 //-*****************************************************************************
 class ChildIterator
@@ -202,15 +216,13 @@ void register_iobject()
               "specified upon their creation",
               return_internal_reference<1>() )
         .def( "getName",
-              &Abc::IObject::getName,
+              &getNameAsObject,
               "Return the name of this object. The name is unique amongst "
-              "their siblings",
-              return_value_policy<copy_const_reference>() )
+              "their siblings" )
         .def( "getFullName",
-              &Abc::IObject::getFullName,
+              &getFullNameAsObject,
               "Return the full name of this object. The full name is unique "
-              "within the entire archive",
-              return_value_policy<copy_const_reference>() )
+              "within the entire archive" )
         .def( "getNumChildren",
               &Abc::IObject::getNumChildren,
               "Return the number of child IObjects that this object has" )
@@ -277,8 +289,7 @@ void register_iobject()
               "Return a string representation of the children hash for this object. Empty string if not found." )
         .def( "valid", &Abc::IObject::valid )
         .def( "reset", &Abc::IObject::reset )
-        .def( "__str__", &Abc::IObject::getFullName,
-              return_value_policy<copy_const_reference>() )
+        .def( "__str__", &getFullNameAsObject )
         .def( ALEMBIC_PYTHON_BOOL_NAME, &Abc::IObject::valid )
         .add_property( "children", &getChildList )
         ;

@@ -39,6 +39,8 @@
 
 #include <Foundation.h>
 
+#include <PyNameUtils.h>
+
 //-*****************************************************************************
 template <class PROP_PTR>
 void register_OBaseProperty( const char* iName )
@@ -58,9 +60,8 @@ void register_OBaseProperty( const char* iName )
               "Return the header of this property",
               return_internal_reference<>() )
         .def( "getName",
-              &OBaseProperty::getName,
-              "Return the local name of this property",
-              return_value_policy<copy_const_reference>() )
+              &getNameToPython<OBaseProperty>,
+              "Return the local name of this property" )
         .def( "getPropertyType",
               &OBaseProperty::getPropertyType )
         .def( "isScalar",
@@ -93,8 +94,7 @@ void register_OBaseProperty( const char* iName )
               &OBaseProperty::reset,
               "Reset this property to an empty state" )
         .def( "valid", &OBaseProperty::valid )
-        .def( "__str__", &OBaseProperty::getName,
-              return_value_policy<copy_const_reference>() )
+        .def( "__str__", &getNameToPython<OBaseProperty> )
         .def( ALEMBIC_PYTHON_BOOL_NAME, &OBaseProperty::valid )
         ;
  }

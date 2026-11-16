@@ -40,6 +40,8 @@
 #include <Foundation.h>
 #include <PyTypeBindingTraits.h>
 
+#include <PyNameUtils.h>
+
 template<class TRAITS>
 class SampleDerived : public AbcG::OTypedGeomParam<TRAITS>::Sample
 {
@@ -245,8 +247,7 @@ static void register_( const char* iName )
         .def( "getTimeSampling",
               &OGeomParam::getTimeSampling )
         .def( "getName",
-              &OGeomParam::getName,
-              return_value_policy<copy_const_reference>() )
+              &getNameToPython<OGeomParam> )
         .def( "getValueProperty",
               &OGeomParam::getValueProperty )
         .def( "getIndexProperty",

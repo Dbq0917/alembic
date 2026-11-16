@@ -41,6 +41,8 @@
 
 #include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 
+#include <PyNameUtils.h>
+
 using namespace boost::python;
 
 //-*****************************************************************************
@@ -273,7 +275,7 @@ void register_materialflatten()
         .def( "valid",
               &NetworkNode::valid )
         .def( "getName",
-              &NetworkNode::getName )
+              &getNameToPython<NetworkNode> )
         .def( "getTarget",
               &NetworkNodeOverloads::getTarget )
         .def( "getNodeType",

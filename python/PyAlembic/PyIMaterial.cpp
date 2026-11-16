@@ -39,6 +39,8 @@
 #include <PyISchemaObject.h>
 #include <PyTypeBindingUtil.h>
 
+#include <PyNameUtils.h>
+
 using namespace boost::python;
 
 //-*****************************************************************************
@@ -312,7 +314,7 @@ void register_imaterial()
     .def( "valid",
           &NetworkNode::valid )
     .def( "getName",
-          &NetworkNode::getName )
+          &getNameToPython<NetworkNode> )
     .def( "getTarget",
           &NetworkNodeOverloads::getTarget )
     .def( "getNodeType",

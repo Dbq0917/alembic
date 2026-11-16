@@ -161,6 +161,11 @@ INSTALL (TARGETS alembic
     DESTINATION ${ALEMBIC_PYTHON_INSTALL_DIR}
 )
 
+# Batch scanner/manifest exporter for archives with non-UTF-8 names
+INSTALL (FILES abc_encoding_audit.py
+    DESTINATION ${ALEMBIC_PYTHON_INSTALL_DIR}
+)
+
 # Not sure about the best way to find the Imath python bindings for Mac
 IF (USE_TESTS AND NOT APPLE)
     ADD_SUBDIRECTORY(Tests)

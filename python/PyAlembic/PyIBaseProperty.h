@@ -39,6 +39,8 @@
 
 #include <Foundation.h>
 
+#include <PyNameUtils.h>
+
 //-*****************************************************************************
 template <class PROP_PTR>
 void register_IBaseProperty( const char* iName )
@@ -58,9 +60,8 @@ void register_IBaseProperty( const char* iName )
               "Return the header of this property",
               return_internal_reference<>() )
         .def( "getName",
-              &IBaseProperty::getName,
-              "Return the local name of this property",
-              return_value_policy<copy_const_reference>() )
+              &getNameToPython<IBaseProperty>,
+              "Return the local name of this property" )
         .def( "getPropertyType",
               &IBaseProperty::getPropertyType )
         .def( "isScalar",
@@ -93,8 +94,7 @@ void register_IBaseProperty( const char* iName )
               &IBaseProperty::reset,
               "Reset this property to an empty state" )
         .def( "valid", &IBaseProperty::valid )
-        .def( "__str__", &IBaseProperty::getName,
-              return_value_policy<copy_const_reference>() )
+        .def( "__str__", &getNameToPython<IBaseProperty> )
         .def( ALEMBIC_PYTHON_BOOL_NAME, &IBaseProperty::valid )
         ;
  }

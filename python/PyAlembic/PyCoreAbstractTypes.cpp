@@ -35,9 +35,30 @@
 //-*****************************************************************************
 
 #include <Foundation.h>
+#include <PyNameUtils.h>
 #include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 
 using namespace boost::python;
+
+//-*****************************************************************************
+static object getObjectHeaderNameAsObject( const AbcA::ObjectHeader &iHeader )
+{
+    return nameToPython( iHeader.getName() );
+}
+
+//-*****************************************************************************
+static object getObjectHeaderFullNameAsObject(
+    const AbcA::ObjectHeader &iHeader )
+{
+    return nameToPython( iHeader.getFullName() );
+}
+
+//-*****************************************************************************
+static object getPropertyHeaderNameAsObject(
+    const AbcA::PropertyHeader &iHeader )
+{
+    return nameToPython( iHeader.getName() );
+}
 
 //-*****************************************************************************
 void register_coreabstracttypes()
@@ -160,21 +181,18 @@ void register_coreabstracttypes()
         "Object",
         no_init )
         .def( "getName",
-              &AbcA::ObjectHeader::getName,
+              &getObjectHeaderNameAsObject,
               "Return the name of the object, which is unique amongst its "
-              "siblings",
-              return_value_policy<copy_const_reference>() )
+              "siblings" )
         .def( "getFullName",
-              &AbcA::ObjectHeader::getFullName,
+              &getObjectHeaderFullNameAsObject,
               "Return the full name of the object, which is unique in the "
-              "whole file",
-              return_value_policy<copy_const_reference>() )
+              "whole file" )
         .def( "getMetaData",
               getNonConstMetaData,
               "Return the MetaData of the object",
               return_internal_reference<>() )
-        .def( "__str__", &AbcA::ObjectHeader::getFullName,
-              return_value_policy<copy_const_reference>() )
+        .def( "__str__", &getObjectHeaderFullNameAsObject )
         ;
 
     // PropertyHeader
@@ -186,10 +204,9 @@ void register_coreabstracttypes()
         "from a CompoundProperty",
         no_init )
         .def( "getName",
-              &AbcA::PropertyHeader::getName,
+              &getPropertyHeaderNameAsObject,
               "Return the name of the property, which is unique amongst its "
-              " siblings",
-              return_value_policy<copy_const_reference>() )
+              " siblings" )
         .def( "isScalar",
               &AbcA::PropertyHeader::isScalar,
               "Return True if the property is scalar" )
@@ -217,8 +234,7 @@ void register_coreabstracttypes()
         .def( "isUV",
               &Alembic::AbcGeom::isUV,
               "Return true if the property is tagged as being UVs" )
-        .def( "__str__", &AbcA::PropertyHeader::getName,
-              return_value_policy<copy_const_reference>() )
+        .def( "__str__", &getPropertyHeaderNameAsObject )
         ;
 
     // TimeSamplingType
