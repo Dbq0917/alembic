@@ -40,14 +40,54 @@ namespace Alembic {
 namespace Abc {
 namespace ALEMBIC_VERSION_NS {
 
+namespace {
+
+const char * kSourceName = "sourceName";
+const char * kSourceNameSet = "sourceNameSet";
+
+} // End anonymous namespace
+
 void SetSourceName( AbcA::MetaData &ioMetaData, const std::string & iName )
 {
-    ioMetaData.set( "sourceName", iName );
+    ioMetaData.set( kSourceName, iName );
+}
+
+void SetSourceName( AbcA::MetaData &ioMetaData, const std::string & iName,
+                    bool iIsSet )
+{
+    if ( !iIsSet )
+    {
+        return;
+    }
+
+    SetSourceName( ioMetaData, iName );
+
+    if ( iName.empty() )
+    {
+        ioMetaData.set( kSourceNameSet, "1" );
+    }
+}
+
+bool HasSourceName( const AbcA::MetaData &iMetaData )
+{
+    return iMetaData.get( kSourceName ) != "" ||
+           iMetaData.get( kSourceNameSet ) == "1";
+}
+
+bool GetSourceName( const AbcA::MetaData &iMetaData, std::string & oName )
+{
+    if ( !HasSourceName( iMetaData ) )
+    {
+        return false;
+    }
+
+    oName = iMetaData.get( kSourceName );
+    return true;
 }
 
 std::string GetSourceName( const AbcA::MetaData &iMetaData )
 {
-    return iMetaData.get( "sourceName" );
+    return iMetaData.get( kSourceName );
 }
 
 } // End namespace ALEMBIC_VERSION_NS

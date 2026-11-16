@@ -278,6 +278,7 @@ public:
         m_selectiveExport = false;
         m_numSamples = 0;
         m_timeSamplingIndex = 0;
+        m_uvSourceNameSet = false;
     }
 
 
@@ -342,6 +343,12 @@ public:
     //! ...
     size_t getNumSamples() const { return m_numSamples; }
 
+    //! Optional source name for the UV param.
+    //! Must be set before the first UV sample is set.
+    //! Calling this with an empty string explicitly records an empty source
+    //! name, which can be distinguished from never calling this function.
+    void setUVSourceName( const std::string & iName );
+
     //! Set a sample! Sample zero has to have non-degenerate
     //! positions, indices and counts.
     void set( const sample_type &iSamp );
@@ -368,6 +375,9 @@ public:
         m_nVerticesProperty.reset();
         m_ordersProperty.reset();
         m_knotsProperty.reset();
+
+        m_uvSourceName.clear();
+        m_uvSourceNameSet = false;
 
         m_basisAndTypeProperty.reset();
 
@@ -427,6 +437,10 @@ private:
     Abc::OFloatArrayProperty m_positionWeightsProperty;
     Abc::OUcharArrayProperty m_ordersProperty;
     Abc::OFloatArrayProperty m_knotsProperty;
+
+    // optional source name for the UVs
+    std::string m_uvSourceName;
+    bool m_uvSourceNameSet;
 
     Abc::OScalarProperty m_basisAndTypeProperty;
 };

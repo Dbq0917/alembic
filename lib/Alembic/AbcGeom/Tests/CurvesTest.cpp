@@ -281,6 +281,104 @@ void sparseTest()
 }
 
 //-*****************************************************************************
+void uvSourceTest()
+{
+    const std::string name = "curvesUVSourceTest.abc";
+
+    OV2fGeomParam::Sample uvSample(
+        V2fArraySample( (const V2f *)g_uvs, g_totalVerts ),
+        kVertexScope );
+
+    OCurvesSchema::Sample curvesSample(
+        V3fArraySample( ( const V3f * ) g_verts, g_totalVerts ),
+        Int32ArraySample( g_numVerts, g_numCurves),
+        kCubic,
+        kNonPeriodic,
+        OFloatGeomParam::Sample(),
+        uvSample );
+
+    {
+        OArchive archive( Alembic::AbcCoreOgawa::WriteArchive(), name );
+
+        OCurves named( OObject( archive, kTop ), "uvNamed" );
+        named.getSchema().setUVSourceName( "map1" );
+        named.getSchema().set( curvesSample );
+
+        OCurves empty( OObject( archive, kTop ), "uvEmpty" );
+        empty.getSchema().setUVSourceName( "" );
+        empty.getSchema().set( curvesSample );
+
+        OCurves unset( OObject( archive, kTop ), "uvUnset" );
+        unset.getSchema().set( curvesSample );
+    }
+
+    {
+        IArchive archive( Alembic::AbcCoreOgawa::ReadArchive(), name );
+
+        // Read through the curves schema API.
+        ICurves named( IObject( archive, kTop ), "uvNamed" );
+        ICurvesSchema &namedSchema = named.getSchema();
+        TESTING_ASSERT( namedSchema.hasUVSourceName() );
+        TESTING_ASSERT( namedSchema.getUVSourceName() == "map1" );
+
+        std::string sourceName = "unchanged";
+        TESTING_ASSERT( namedSchema.getUVSourceName( sourceName ) );
+        TESTING_ASSERT( sourceName == "map1" );
+
+        ICurves empty( IObject( archive, kTop ), "uvEmpty" );
+        ICurvesSchema &emptySchema = empty.getSchema();
+        TESTING_ASSERT( emptySchema.hasUVSourceName() );
+        TESTING_ASSERT( emptySchema.getUVSourceName() == "" );
+
+        sourceName = "unchanged";
+        TESTING_ASSERT( emptySchema.getUVSourceName( sourceName ) );
+        TESTING_ASSERT( sourceName == "" );
+
+        ICurves unset( IObject( archive, kTop ), "uvUnset" );
+        ICurvesSchema &unsetSchema = unset.getSchema();
+        TESTING_ASSERT( !unsetSchema.hasUVSourceName() );
+        TESTING_ASSERT( unsetSchema.getUVSourceName() == "" );
+
+        sourceName = "unchanged";
+        TESTING_ASSERT( !unsetSchema.getUVSourceName( sourceName ) );
+        TESTING_ASSERT( sourceName == "unchanged" );
+
+        // Read the same setting directly from the uv property metadata.
+        IObject namedObj( IObject( archive, kTop ), "uvNamed" );
+        ICompoundProperty namedGeom( namedObj.getProperties(), ".geom" );
+        const AbcA::PropertyHeader *namedUV =
+            namedGeom.getPropertyHeader( "uv" );
+        TESTING_ASSERT( namedUV != NULL );
+        TESTING_ASSERT( GetSourceName( namedUV->getMetaData() ) == "map1" );
+        TESTING_ASSERT( HasSourceName( namedUV->getMetaData() ) );
+
+        IObject emptyObj( IObject( archive, kTop ), "uvEmpty" );
+        ICompoundProperty emptyGeom( emptyObj.getProperties(), ".geom" );
+        const AbcA::PropertyHeader *emptyUV =
+            emptyGeom.getPropertyHeader( "uv" );
+        TESTING_ASSERT( emptyUV != NULL );
+        TESTING_ASSERT( GetSourceName( emptyUV->getMetaData() ) == "" );
+        TESTING_ASSERT( HasSourceName( emptyUV->getMetaData() ) );
+
+        sourceName = "unchanged";
+        TESTING_ASSERT( GetSourceName( emptyUV->getMetaData(), sourceName ) );
+        TESTING_ASSERT( sourceName == "" );
+
+        IObject unsetObj( IObject( archive, kTop ), "uvUnset" );
+        ICompoundProperty unsetGeom( unsetObj.getProperties(), ".geom" );
+        const AbcA::PropertyHeader *unsetUV =
+            unsetGeom.getPropertyHeader( "uv" );
+        TESTING_ASSERT( unsetUV != NULL );
+        TESTING_ASSERT( GetSourceName( unsetUV->getMetaData() ) == "" );
+        TESTING_ASSERT( !HasSourceName( unsetUV->getMetaData() ) );
+
+        sourceName = "unchanged";
+        TESTING_ASSERT( !GetSourceName( unsetUV->getMetaData(), sourceName ) );
+        TESTING_ASSERT( sourceName == "unchanged" );
+    }
+}
+
+//-*****************************************************************************
 //-*****************************************************************************
 //-*****************************************************************************
 // MAIN FUNCTION!
@@ -306,6 +404,7 @@ int main( int argc, char *argv[] )
     Example2_CurvesIn();
 
     sparseTest();
+    uvSourceTest();
 
     return 0;
 }

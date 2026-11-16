@@ -9,3 +9,39 @@ AbcImport "scene.abc";
 
 Other options can be viewed via:
 AbcImport -h;
+
+Curve UV source names
+---------------------
+Alembic curves can carry an optional UV source name on the "uv" geometry
+parameter. Set it on the curves schema before setting the first sample that
+contains UV data:
+
+    Alembic::AbcGeom::OCurves curves( parent, "curves" );
+    curves.getSchema().setUVSourceName( "map1" );
+    curves.getSchema().set( curvesSample );
+
+The Python binding exposes the same operation:
+
+    curves.getSchema().setUVSourceName( "map1" )
+
+If the UV source name is not set, no sourceName metadata is written and the
+file behaves exactly like previous Alembic versions. Calling
+setUVSourceName( "" ) explicitly records an empty source name. An importer
+must distinguish that case from an unset source name:
+
+    std::string uvSource;
+    if ( schema.getUVSourceName( uvSource ) )
+    {
+        // uvSource is valid and may be empty
+    }
+    else
+    {
+        // the source name was never set
+    }
+
+In Python, use hasUVSourceName() together with getUVSourceName() to make the
+same distinction.
+
+When importing assets, verify the setting after reopening the file. If the
+value read back does not match the value that was requested, fail the import
+instead of silently accepting incorrect UV assignments.

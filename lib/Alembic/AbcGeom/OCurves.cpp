@@ -36,6 +36,7 @@
 
 #include <Alembic/AbcGeom/OCurves.h>
 #include <Alembic/AbcGeom/GeometryScope.h>
+#include <Alembic/Abc/SourceName.h>
 
 namespace Alembic {
 namespace AbcGeom {
@@ -427,6 +428,8 @@ void OCurvesSchema::createUVsProperty( const Sample &iSamp )
     std::vector<Util::uint32_t> emptyIndices;
 
     OV2fGeomParam::Sample empty;
+    AbcA::MetaData mdata;
+    Abc::SetSourceName( mdata, m_uvSourceName, m_uvSourceNameSet );
 
     if ( iSamp.getUVs().getIndices() )
     {
@@ -437,7 +440,7 @@ void OCurvesSchema::createUVsProperty( const Sample &iSamp )
         // UVs are indexed
         m_uvsParam = OV2fGeomParam( this->getPtr(), "uv", true,
                                     empty.getScope(), 1,
-                                    this->getTimeSampling() );
+                                    this->getTimeSampling(), mdata );
     }
     else
     {
@@ -447,7 +450,7 @@ void OCurvesSchema::createUVsProperty( const Sample &iSamp )
         // UVs are not indexed
         m_uvsParam = OV2fGeomParam( this->getPtr(), "uv", false,
                                empty.getScope(), 1,
-                               this->getTimeSampling() );
+                               this->getTimeSampling(), mdata );
     }
 
     // set all the missing samples
@@ -579,6 +582,13 @@ void OCurvesSchema::createKnotsProperty()
 }
 
 //-*****************************************************************************
+void OCurvesSchema::setUVSourceName( const std::string & iName )
+{
+    m_uvSourceName = iName;
+    m_uvSourceNameSet = true;
+}
+
+//-*****************************************************************************
 void OCurvesSchema::calcBasisAndType(Alembic::Util::uint8_t (&basisAndType)[4], const Sample &iSamp)
 {
     basisAndType[0] = iSamp.getType();
@@ -658,6 +668,9 @@ void OCurvesSchema::init( const AbcA::index_t iTsIdx, bool isSparse )
     m_numSamples = 0;
 
     m_timeSamplingIndex = iTsIdx;
+
+    m_uvSourceName.clear();
+    m_uvSourceNameSet = false;
 
     if ( m_selectiveExport )
     {

@@ -45,6 +45,23 @@ namespace Abc {
 namespace ALEMBIC_VERSION_NS {
 
 ALEMBIC_EXPORT void SetSourceName( AbcA::MetaData &ioMetaData, const std::string & iName );
+
+//! Sets a source name when iIsSet is true. Explicitly setting an empty name
+//! records that the source name was set, so it can be distinguished from an
+//! unset source name when read back.
+ALEMBIC_EXPORT void SetSourceName( AbcA::MetaData &ioMetaData,
+                                   const std::string & iName,
+                                   bool iIsSet );
+
+//! Returns whether a source name was explicitly set.
+//! This distinguishes an unset source name from one explicitly set to "".
+ALEMBIC_EXPORT bool HasSourceName( const AbcA::MetaData &iMetaData );
+
+//! Returns false if no source name was set. Otherwise returns true and
+//! writes the source name (which may be empty) into oName.
+ALEMBIC_EXPORT bool GetSourceName( const AbcA::MetaData &iMetaData,
+                                   std::string & oName );
+
 ALEMBIC_EXPORT std::string GetSourceName( const AbcA::MetaData &iMetaData );
 
 } // End namespace ALEMBIC_VERSION_NS

@@ -42,6 +42,7 @@
 #include <Alembic/AbcGeom/Basis.h>
 #include <Alembic/AbcGeom/CurveType.h>
 #include <Alembic/AbcGeom/SchemaInfoDeclarations.h>
+#include <Alembic/Abc/SourceName.h>
 #include <Alembic/AbcGeom/IGeomParam.h>
 #include <Alembic/AbcGeom/IGeomBase.h>
 
@@ -232,6 +233,38 @@ public:
     IV2fGeomParam getUVsParam() const
     {
         return m_uvsParam;
+    }
+
+    //! Returns whether the UV param has an explicitly set source name.
+    //! An explicitly empty source name returns true, while an unset source
+    //! name returns false.
+    bool hasUVSourceName() const
+    {
+        return m_uvsParam && Abc::HasSourceName( m_uvsParam.getMetaData() );
+    }
+
+    //! Returns the source name for the UV param, or an empty string when it
+    //! was not set. Use hasUVSourceName() to distinguish the two cases.
+    std::string getUVSourceName() const
+    {
+        if ( !m_uvsParam )
+        {
+            return "";
+        }
+
+        return Abc::GetSourceName( m_uvsParam.getMetaData() );
+    }
+
+    //! Returns false if the UV source name was not set. Otherwise returns
+    //! true and writes the source name (which may be empty) into oName.
+    bool getUVSourceName( std::string & oName ) const
+    {
+        if ( !m_uvsParam )
+        {
+            return false;
+        }
+
+        return Abc::GetSourceName( m_uvsParam.getMetaData(), oName );
     }
 
     IN3fGeomParam getNormalsParam() const

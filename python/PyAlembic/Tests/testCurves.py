@@ -174,3 +174,36 @@ class CurvesTest(unittest.TestCase):
         self.assertEqual(len( widthSamp.getVals() ), 12)
         self.assertTrue(IFloatGeomParam.matches( curves.getWidthsParam().getHeader()))
         self.assertEqual(widthSamp.getScope(), kVertexScope)
+
+    def testCurvesUVSource(self):
+        'round trip named, empty, and unset curve UV sources'
+
+        archive = OArchive( 'curvesUVSource.abc' )
+        uvSamp = OV2fGeomParamSample( uvs, kVertexScope )
+        curvesSamp = OCurvesSchemaSample( verts, numVerts, kCubic,
+            kNonPeriodic, OFloatGeomParamSample(), uvSamp )
+
+        named = OCurves( archive.getTop(), 'uvNamed' )
+        named.getSchema().setUVSourceName( 'map1' )
+        named.getSchema().set( curvesSamp )
+
+        empty = OCurves( archive.getTop(), 'uvEmpty' )
+        empty.getSchema().setUVSourceName( '' )
+        empty.getSchema().set( curvesSamp )
+
+        unset = OCurves( archive.getTop(), 'uvUnset' )
+        unset.getSchema().set( curvesSamp )
+
+        inArchive = IArchive( 'curvesUVSource.abc' )
+
+        namedSchema = ICurves( inArchive.getTop(), 'uvNamed' ).getSchema()
+        self.assertTrue( namedSchema.hasUVSourceName() )
+        self.assertEqual( namedSchema.getUVSourceName(), 'map1' )
+
+        emptySchema = ICurves( inArchive.getTop(), 'uvEmpty' ).getSchema()
+        self.assertTrue( emptySchema.hasUVSourceName() )
+        self.assertEqual( emptySchema.getUVSourceName(), '' )
+
+        unsetSchema = ICurves( inArchive.getTop(), 'uvUnset' ).getSchema()
+        self.assertFalse( unsetSchema.hasUVSourceName() )
+        self.assertEqual( unsetSchema.getUVSourceName(), '' )

@@ -98,6 +98,11 @@ void register_icurves()
               &AbcG::ICurvesSchema::getPositionWeightsProperty )
         .def( "getUVsParam",
               &AbcG::ICurvesSchema::getUVsParam )
+        .def( "hasUVSourceName",
+              &AbcG::ICurvesSchema::hasUVSourceName )
+        .def( "getUVSourceName",
+              static_cast<std::string (AbcG::ICurvesSchema::*)() const>(
+                  &AbcG::ICurvesSchema::getUVSourceName ) )
         .def( "getNormalsParam",
               &AbcG::ICurvesSchema::getNormalsParam )
         .def( "getWidthsParam",

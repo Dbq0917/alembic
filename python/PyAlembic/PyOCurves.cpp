@@ -68,6 +68,8 @@ void register_ocurves()
               ( arg( "iSamp" ) ) )
         .def( "setFromPrevious",
               &AbcG::OCurvesSchema::setFromPrevious )
+        .def( "setUVSourceName",
+              &AbcG::OCurvesSchema::setUVSourceName )
         .def( "reset", &AbcG::OCurvesSchema::reset )
         .def( "valid", &AbcG::OCurvesSchema::valid )
         .def( ALEMBIC_PYTHON_BOOL_NAME, &AbcG::OCurvesSchema::valid )
