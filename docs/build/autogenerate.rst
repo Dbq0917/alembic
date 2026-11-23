@@ -1025,3 +1025,38 @@ by contrast, when no new operations are detected::
    and :paramref:`.EnvironmentContext.configure.compare_server_default`
    are in play as usual, as well as that limitations in autogenerate
    detection are the same when running ``alembic check``.
+
+.. _alembic_check_downgrade:
+
+Checking downgrade operations
+-----------------------------
+
+The ``alembic check --downgrade`` option performs a read-only dry run of the
+downgrade path instead of comparing the database to the model metadata.  The
+migration functions are invoked and their schema operations are inspected, but
+no DDL is sent to the database.  Before each table, index, column or constraint
+drop, the check verifies that the target exists at that point in the simulated
+downgrade sequence:
+
+.. sourcecode:: text
+
+    $ alembic check --downgrade
+    FAILED: Downgrade check detected missing schema objects: index
+    'ix_orders_code' on table 'orders'
+
+Objects that exist in the database are accepted even if they were created
+outside of migrations, so manually added indexes do not cause false failures.
+If a missing object is guarded by ``if_exists=True``, the check reports it as
+skipped rather than failing.  The target revision defaults to ``base`` and can
+be changed with ``--downgrade-revision``:
+
+.. sourcecode:: text
+
+    $ alembic check --downgrade --downgrade-revision=-1
+
+Statements emitted through ``op.execute()`` or arbitrary use of
+``op.get_bind()`` cannot be introspected.  They are not executed during the
+check, and the number of operations that could not be checked is reported.
+If such a statement appears to change the schema, later drops that cannot be
+verified are reported as unchecked rather than as missing, avoiding false
+failures for objects created by dynamic SQL.

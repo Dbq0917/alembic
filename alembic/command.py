@@ -317,16 +317,73 @@ def revision(
         return scripts
 
 
-def check(config: Config) -> None:
+def check(
+    config: Config,
+    downgrade: bool = False,
+    downgrade_revision: str = "base",
+) -> None:
     """Check if revision command with autogenerate has pending upgrade ops.
 
+    When :paramref:`.command.check.downgrade` is True, performs a read-only
+    dry run of the downgrade path instead.  Migration functions are invoked
+    and their schema operations are inspected, but no DDL is emitted.  Drop
+    operations whose target does not exist are reported before a real
+    downgrade can leave the database at an intermediate revision.
+
     :param config: a :class:`.Config` object.
+
+    :param downgrade: if True, check downgrade operations instead of
+     checking for new upgrade operations.
+
+    :param downgrade_revision: the revision to downgrade to when
+     :paramref:`.command.check.downgrade` is True.  Defaults to ``"base"``.
+
+     .. versionadded:: 1.20.2
 
     .. versionadded:: 1.9.0
 
     """
 
     script_directory = ScriptDirectory.from_config(config)
+
+    if downgrade:
+        from .runtime.downgrade_check import DowngradeChecker
+
+        checker = DowngradeChecker()
+
+        def retrieve_downgrades(rev, context):
+            return script_directory._downgrade_revs(downgrade_revision, rev)
+
+        with EnvironmentContext(
+            config,
+            script_directory,
+            fn=retrieve_downgrades,
+            destination_rev=downgrade_revision,
+            downgrade_check=checker,
+            dont_mutate=True,
+        ):
+            script_directory.run_env()
+
+        checker.raise_if_missing()
+
+        if checker.skipped:
+            config.print_stdout(
+                "%d missing object(s) are guarded by if_exists=True and "
+                "would be skipped.",
+                len(checker.skipped),
+            )
+            for description in checker.skipped:
+                config.print_stdout("Guarded missing object: %s", description)
+        if checker.unchecked:
+            config.print_stdout(
+                "%d operation(s) could not be checked (raw SQL or "
+                "unsupported DDL).",
+                len(checker.unchecked),
+            )
+        config.print_stdout(
+            "Downgrade check passed; no missing schema objects detected."
+        )
+        return
 
     command_args = dict(
         message=None,

@@ -21,6 +21,7 @@ from sqlalchemy import schema
 from sqlalchemy import String
 from sqlalchemy import Table
 from sqlalchemy import text
+from sqlalchemy.engine.strategies import MockEngineStrategy
 
 from . import _autogen
 from . import base
@@ -126,6 +127,7 @@ class DefaultImpl(metaclass=ImplMeta):
         self.output_buffer = output_buffer
         self.memo: dict = {}
         self.context_opts = context_opts
+        self._downgrade_check_bind: Any = None
         if transactional_ddl is not None:
             self.transactional_ddl = transactional_ddl
 
@@ -204,6 +206,16 @@ class DefaultImpl(metaclass=ImplMeta):
 
     @property
     def bind(self) -> Connection | None:
+        downgrade_checker = self.context_opts.get("downgrade_check")
+        if downgrade_checker is not None:
+            if self._downgrade_check_bind is None:
+                self._downgrade_check_bind = MockEngineStrategy.MockConnection(
+                    self.dialect,
+                    lambda construct, *args, **kw: (
+                        downgrade_checker.process(construct)
+                    ),
+                )
+            return self._downgrade_check_bind
         return self.connection
 
     def _exec(
@@ -215,6 +227,10 @@ class DefaultImpl(metaclass=ImplMeta):
     ) -> CursorResult | None:
         if isinstance(construct, str):
             construct = text(construct)
+        downgrade_checker = self.context_opts.get("downgrade_check")
+        if downgrade_checker is not None:
+            downgrade_checker.process(construct)
+            return None
         if self.as_sql:
             if multiparams is not None or params:
                 raise TypeError("SQL parameters not allowed with as_sql")

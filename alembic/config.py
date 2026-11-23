@@ -825,6 +825,29 @@ class CommandLine:
                 ),
             ),
         ),
+        "downgrade": (
+            "--downgrade",
+            "--check-downgrade",
+            "--check-downgrades",
+            dict(
+                action="store_true",
+                help=(
+                    "With 'check', perform a read-only dry run of downgrade "
+                    "operations and report schema objects that do not exist."
+                ),
+            ),
+        ),
+        "downgrade_revision": (
+            "--downgrade-revision",
+            dict(
+                type=str,
+                default="base",
+                help=(
+                    "Revision target for 'check --downgrade'; defaults to "
+                    "'base'."
+                ),
+            ),
+        ),
     }
     _POSITIONAL_OPTS = {
         "directory": dict(help="location of scripts directory"),

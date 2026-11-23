@@ -160,6 +160,10 @@ class MigrationContext:
         )
         self.as_sql = as_sql
 
+        downgrade_checker = opts.get("downgrade_check")
+        if downgrade_checker is not None and not as_sql:
+            downgrade_checker.connection = connection
+
         self.purge = opts.get("purge", False)
 
         if "output_encoding" in opts:
