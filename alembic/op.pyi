@@ -60,6 +60,7 @@ def add_column(
     if_not_exists: bool | None = None,
     inline_references: bool | None = None,
     inline_primary_key: bool | None = None,
+    **kw: Any,
 ) -> None:
     """Issue an "add column" instruction using the current
     migration context.
@@ -201,6 +202,30 @@ def add_column(
      primary key constraint.
 
      .. versionadded:: 1.18.4
+
+    :param mysql_algorithm: MySQL / MariaDB only.  Render an
+     ``ALGORITHM=<value>`` clause as part of the ``ALTER TABLE``
+     statement, e.g. ``ALGORITHM=INSTANT`` or ``ALGORITHM=INPLACE``.
+     Combined with ``mysql_lock="NONE"`` this allows the column to be
+     added as an "online" DDL operation that does not block concurrent
+     reads and writes; the statement fails immediately if the server
+     cannot honor the requested algorithm, rather than falling back to
+     a locking table copy.  May also be set for all migrations within
+     an environment by passing ``mysql_algorithm`` to
+     :meth:`.EnvironmentContext.configure`; a value given here takes
+     precedence over the environment-wide setting.
+
+     .. versionadded:: 1.21
+
+    :param mysql_lock: MySQL / MariaDB only.  Render a
+     ``LOCK=<value>`` clause as part of the ``ALTER TABLE`` statement,
+     e.g. ``LOCK=NONE``.  See :paramref:`.AddColumnOp.mysql_algorithm`.
+     May also be set for all migrations within an environment by
+     passing ``mysql_lock`` to :meth:`.EnvironmentContext.configure`;
+     a value given here takes precedence over the environment-wide
+     setting.
+
+     .. versionadded:: 1.21
 
     """
 

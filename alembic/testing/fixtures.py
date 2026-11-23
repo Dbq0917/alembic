@@ -221,10 +221,13 @@ def op_fixture(
     naming_convention=None,
     literal_binds=False,
     native_boolean=None,
+    context_opts=None,
 ):
     opts = {}
     if naming_convention:
         opts["target_metadata"] = MetaData(naming_convention=naming_convention)
+    if context_opts:
+        opts.update(context_opts)
 
     class buffer_:
         def __init__(self):

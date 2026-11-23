@@ -13,6 +13,7 @@ from sqlalchemy.sql import elements
 from sqlalchemy.sql import functions
 from sqlalchemy.sql import operators
 
+from .base import AddColumn
 from .base import alter_table
 from .base import AlterColumn
 from .base import ColumnDefault
@@ -21,6 +22,7 @@ from .base import ColumnNullable
 from .base import ColumnType
 from .base import format_column_name
 from .base import format_server_default
+from .base import visit_add_column
 from .impl import DefaultImpl
 from .. import util
 from ..util import sqla_compat
@@ -30,9 +32,11 @@ from ..util.sqla_compat import compiles
 if TYPE_CHECKING:
     from typing import Literal
 
+    from sqlalchemy import Column
     from sqlalchemy.dialects.mysql.base import MySQLDDLCompiler
     from sqlalchemy.sql.ddl import DropConstraint
     from sqlalchemy.sql.elements import ClauseElement
+    from sqlalchemy.sql.elements import quoted_name
     from sqlalchemy.sql.schema import Constraint
     from sqlalchemy.sql.type_api import TypeEngine
 
@@ -83,6 +87,24 @@ def _is_numeric_affinity(type_: TypeEngine) -> bool:
     )
 
 
+_MYSQL_ALTER_ALGORITHMS = frozenset(
+    ["DEFAULT", "INSTANT", "INPLACE", "COPY", "NOCOPY"]
+)
+_MYSQL_ALTER_LOCKS = frozenset(["DEFAULT", "NONE", "SHARED", "EXCLUSIVE"])
+
+
+def _validate_mysql_alter_option(
+    option: str, value: str, allowed: frozenset[str]
+) -> str:
+    normalized = value.strip().upper()
+    if normalized not in allowed:
+        raise util.CommandError(
+            "Invalid value %r for MySQL ALTER TABLE %s option; "
+            "expected one of: %s" % (value, option, ", ".join(sorted(allowed)))
+        )
+    return normalized
+
+
 class MySQLImpl(DefaultImpl):
     __dialect__ = "mysql"
 
@@ -92,6 +114,56 @@ class MySQLImpl(DefaultImpl):
         {"JSON", "LONGTEXT"},
     )
     type_arg_extract = [r"character set ([\w\-_]+)", r"collate ([\w\-_]+)"]
+
+    def add_column(
+        self,
+        table_name: str,
+        column: Column[Any],
+        *,
+        schema: str | quoted_name | None = None,
+        if_not_exists: bool | None = None,
+        inline_references: bool | None = None,
+        inline_primary_key: bool | None = None,
+        mysql_algorithm: str | None = None,
+        mysql_lock: str | None = None,
+        **kw: Any,
+    ) -> None:
+        if mysql_algorithm is None:
+            mysql_algorithm = self.context_opts.get("mysql_algorithm")
+        if mysql_lock is None:
+            mysql_lock = self.context_opts.get("mysql_lock")
+
+        if mysql_algorithm is None and mysql_lock is None:
+            return super().add_column(
+                table_name,
+                column,
+                schema=schema,
+                if_not_exists=if_not_exists,
+                inline_references=inline_references,
+                inline_primary_key=inline_primary_key,
+            )
+
+        if mysql_algorithm is not None:
+            mysql_algorithm = _validate_mysql_alter_option(
+                "ALGORITHM", mysql_algorithm, _MYSQL_ALTER_ALGORITHMS
+            )
+        if mysql_lock is not None:
+            mysql_lock = _validate_mysql_alter_option(
+                "LOCK", mysql_lock, _MYSQL_ALTER_LOCKS
+            )
+
+        self._exec(
+            MySQLAddColumn(
+                table_name,
+                column,
+                schema=schema,
+                if_not_exists=if_not_exists,
+                inline_references=inline_references,
+                inline_primary_key=inline_primary_key,
+                mysql_algorithm=mysql_algorithm,
+                mysql_lock=mysql_lock,
+            )
+        )
 
     def render_ddl_sql_expr(
         self,
@@ -428,6 +500,31 @@ class MariaDBImpl(MySQLImpl):
     __dialect__ = "mariadb"
 
 
+class MySQLAddColumn(AddColumn):
+    """Represent an ADD COLUMN that carries MySQL/MariaDB online DDL
+    clauses, e.g. ``ALGORITHM=INPLACE, LOCK=NONE``.
+
+    These clauses allow the ALTER TABLE to proceed without blocking
+    concurrent reads and writes on the table, at the cost of the
+    statement failing outright if the requested algorithm/lock level
+    cannot be honored for the operation.
+
+    """
+
+    def __init__(
+        self,
+        name: str,
+        column: Column[Any],
+        schema: quoted_name | str | None = None,
+        mysql_algorithm: str | None = None,
+        mysql_lock: str | None = None,
+        **kw: Any,
+    ) -> None:
+        super().__init__(name, column, schema=schema, **kw)
+        self.mysql_algorithm = mysql_algorithm
+        self.mysql_lock = mysql_lock
+
+
 class MySQLAlterDefault(AlterColumn):
     def __init__(
         self,
@@ -482,6 +579,18 @@ def _mysql_doesnt_support_individual(element, compiler, **kw):
     raise NotImplementedError(
         "Individual alter column constructs not supported by MySQL"
     )
+
+
+@compiles(MySQLAddColumn, "mysql", "mariadb")
+def _mysql_add_column(
+    element: MySQLAddColumn, compiler: MySQLDDLCompiler, **kw
+) -> str:
+    text = visit_add_column(element, compiler, **kw)
+    if element.mysql_algorithm is not None:
+        text += ", ALGORITHM=%s" % element.mysql_algorithm
+    if element.mysql_lock is not None:
+        text += ", LOCK=%s" % element.mysql_lock
+    return text
 
 
 @compiles(MySQLAlterDefault, "mysql", "mariadb")

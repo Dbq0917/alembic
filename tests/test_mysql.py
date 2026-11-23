@@ -565,6 +565,167 @@ class MySQLOpTest(TestBase):
         )
 
 
+class MySQLOnlineDDLTest(TestBase):
+    """Render online DDL (ALGORITHM / LOCK) clauses for ADD COLUMN, so
+    that columns can be added to very large tables without blocking
+    concurrent reads and writes."""
+
+    def test_add_column_online_per_op(self):
+        context = op_fixture("mysql")
+        op.add_column(
+            "t",
+            Column("c", Integer),
+            mysql_algorithm="INPLACE",
+            mysql_lock="NONE",
+        )
+        context.assert_(
+            "ALTER TABLE t ADD COLUMN c INTEGER, "
+            "ALGORITHM=INPLACE, LOCK=NONE"
+        )
+
+    def test_add_column_online_algorithm_only(self):
+        context = op_fixture("mysql")
+        op.add_column("t", Column("c", Integer), mysql_algorithm="INSTANT")
+        context.assert_(
+            "ALTER TABLE t ADD COLUMN c INTEGER, ALGORITHM=INSTANT"
+        )
+
+    def test_add_column_online_lock_only(self):
+        context = op_fixture("mysql")
+        op.add_column("t", Column("c", Integer), mysql_lock="NONE")
+        context.assert_("ALTER TABLE t ADD COLUMN c INTEGER, LOCK=NONE")
+
+    def test_add_column_online_values_normalized(self):
+        context = op_fixture("mysql")
+        op.add_column(
+            "t",
+            Column("c", Integer),
+            mysql_algorithm="inplace",
+            mysql_lock="none",
+        )
+        context.assert_(
+            "ALTER TABLE t ADD COLUMN c INTEGER, "
+            "ALGORITHM=INPLACE, LOCK=NONE"
+        )
+
+    def test_add_column_online_context_opts(self):
+        context = op_fixture(
+            "mysql",
+            context_opts={
+                "mysql_algorithm": "INPLACE",
+                "mysql_lock": "NONE",
+            },
+        )
+        op.add_column("t", Column("c", Integer))
+        context.assert_(
+            "ALTER TABLE t ADD COLUMN c INTEGER, "
+            "ALGORITHM=INPLACE, LOCK=NONE"
+        )
+
+    def test_add_column_online_per_op_overrides_context(self):
+        context = op_fixture(
+            "mysql",
+            context_opts={
+                "mysql_algorithm": "INPLACE",
+                "mysql_lock": "NONE",
+            },
+        )
+        op.add_column(
+            "t",
+            Column("c", Integer),
+            mysql_algorithm="INSTANT",
+            mysql_lock="SHARED",
+        )
+        context.assert_(
+            "ALTER TABLE t ADD COLUMN c INTEGER, "
+            "ALGORITHM=INSTANT, LOCK=SHARED"
+        )
+
+    def test_add_column_no_online_opts_unchanged(self):
+        context = op_fixture("mysql")
+        op.add_column("t", Column("c", Integer))
+        context.assert_("ALTER TABLE t ADD COLUMN c INTEGER")
+
+    def test_add_column_online_server_default(self):
+        # existing rows must read back the server default for the
+        # new column; the DEFAULT clause is part of the same online
+        # ALTER TABLE statement
+        context = op_fixture(
+            "mysql",
+            context_opts={
+                "mysql_algorithm": "INPLACE",
+                "mysql_lock": "NONE",
+            },
+        )
+        op.add_column(
+            "t", Column("c", Integer, server_default="0", nullable=False)
+        )
+        context.assert_(
+            "ALTER TABLE t ADD COLUMN c INTEGER NOT NULL DEFAULT '0', "
+            "ALGORITHM=INPLACE, LOCK=NONE"
+        )
+
+    def test_add_column_online_as_sql(self):
+        context = op_fixture(
+            "mysql",
+            as_sql=True,
+            context_opts={
+                "mysql_algorithm": "INPLACE",
+                "mysql_lock": "NONE",
+            },
+        )
+        op.add_column("t", Column("c", Integer))
+        context.assert_(
+            "ALTER TABLE t ADD COLUMN c INTEGER, "
+            "ALGORITHM=INPLACE, LOCK=NONE"
+        )
+
+    def test_add_column_online_mariadb(self):
+        context = op_fixture("mariadb")
+        op.add_column(
+            "t",
+            Column("c", Integer),
+            mysql_algorithm="NOCOPY",
+            mysql_lock="NONE",
+        )
+        context.assert_(
+            "ALTER TABLE t ADD COLUMN c INTEGER, ALGORITHM=NOCOPY, LOCK=NONE"
+        )
+
+    def test_add_column_online_invalid_algorithm(self):
+        op_fixture("mysql")
+        assert_raises_message(
+            util.CommandError,
+            "Invalid value 'SIDWAYS' for MySQL ALTER TABLE ALGORITHM "
+            "option",
+            op.add_column,
+            "t",
+            Column("c", Integer),
+            mysql_algorithm="SIDWAYS",
+        )
+
+    def test_add_column_online_invalid_lock(self):
+        op_fixture("mysql")
+        assert_raises_message(
+            util.CommandError,
+            "Invalid value 'MAYBE' for MySQL ALTER TABLE LOCK option",
+            op.add_column,
+            "t",
+            Column("c", Integer),
+            mysql_lock="MAYBE",
+        )
+
+    def test_add_column_online_invalid_context_opt(self):
+        op_fixture("mysql", context_opts={"mysql_lock": "whatever"})
+        assert_raises_message(
+            util.CommandError,
+            "Invalid value 'whatever' for MySQL ALTER TABLE LOCK option",
+            op.add_column,
+            "t",
+            Column("c", Integer),
+        )
+
+
 class MySQLBackendOpTest(AlterColRoundTripFixture, TestBase):
     __only_on__ = "mysql", "mariadb"
     __backend__ = True

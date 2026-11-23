@@ -380,6 +380,7 @@ class DefaultImpl(metaclass=ImplMeta):
         if_not_exists: bool | None = None,
         inline_references: bool | None = None,
         inline_primary_key: bool | None = None,
+        **kw: Any,
     ) -> None:
         self._exec(
             base.AddColumn(
