@@ -305,6 +305,225 @@ finally:
         eq_(rev.module.down_revision, (self.b, self.d))
 
 
+class ConvergeTest(_BufMixin, TestBase):
+    def setUp(self):
+        self.env = staging_env()
+        self.cfg = _sqlite_testing_config()
+
+    def tearDown(self):
+        clear_staging_env()
+
+    def _write_rev(self, rev, down_rev, msg, table):
+        script = ScriptDirectory.from_config(self.cfg)
+        script.generate_revision(
+            rev, msg, refresh=True, head=down_rev or "base", splice=True
+        )
+        write_script(
+            script,
+            rev,
+            f"""\
+"{msg}"
+revision = '{rev}'
+down_revision = {repr(down_rev)}
+
+from alembic import op
+
+
+def upgrade():
+    op.execute("CREATE TABLE {table} (id INTEGER)")
+
+
+def downgrade():
+    op.execute("DROP TABLE {table}")
+
+""",
+        )
+
+    def _two_heads_fixture(self):
+        # a -> b (head)
+        #   -> c (head)
+        self.a = util.rev_id()
+        self.b = util.rev_id()
+        self.c = util.rev_id()
+        self._write_rev(self.a, None, "base", "base_t")
+        self._write_rev(self.b, self.a, "branch one", "branch_one_t")
+        self._write_rev(self.c, self.a, "branch two", "branch_two_t")
+
+    def test_converge_creates_single_head(self):
+        self._two_heads_fixture()
+        script = ScriptDirectory.from_config(self.cfg)
+        eq_(sorted(script.get_heads()), sorted([self.b, self.c]))
+
+        command.converge(self.cfg, rev_id="converge_rev")
+
+        script = ScriptDirectory.from_config(self.cfg)
+        eq_(script.get_heads(), ["converge_rev"])
+        rev = script.get_revision("converge_rev")
+        assert rev.is_merge_point
+        assert os.path.exists(rev.path)
+        eq_(set(rev.module.down_revision), {self.b, self.c})
+
+    def test_converge_default_message(self):
+        self._two_heads_fixture()
+        command.converge(self.cfg, rev_id="converge_rev")
+        rev = ScriptDirectory.from_config(self.cfg).get_revision(
+            "converge_rev"
+        )
+        eq_(rev.doc, "converge heads")
+
+    def test_converge_custom_message(self):
+        self._two_heads_fixture()
+        command.converge(
+            self.cfg, message="join feature branches", rev_id="converge_rev"
+        )
+        rev = ScriptDirectory.from_config(self.cfg).get_revision(
+            "converge_rev"
+        )
+        eq_(rev.doc, "join feature branches")
+
+    def test_converge_single_head_is_noop(self):
+        self.a = util.rev_id()
+        self._write_rev(self.a, None, "base", "base_t")
+        self.cfg.stdout = buf = self._buf_fixture()
+
+        result = command.converge(self.cfg)
+
+        assert result is None
+        script = ScriptDirectory.from_config(self.cfg)
+        eq_(script.get_heads(), [self.a])
+        assert "nothing to converge" in buf.getvalue().decode(
+            "ascii", "replace"
+        )
+
+    def test_converge_no_revisions(self):
+        with expect_raises_message(util.CommandError, "nothing to converge"):
+            command.converge(self.cfg)
+
+    def test_converge_commandline(self):
+        self._two_heads_fixture()
+        cmd = config.CommandLine()
+        options = cmd.parser.parse_args(
+            ["converge", "-m", "cli converge", "--rev-id", "converge_rev"]
+        )
+        cmd.run_cmd(self.cfg, options)
+        script = ScriptDirectory.from_config(self.cfg)
+        eq_(script.get_heads(), ["converge_rev"])
+
+
+class ConvergeOnlineTest(TestBase):
+    __only_on__ = "sqlite"
+
+    def setUp(self):
+        self.bind = _sqlite_file_db()
+        self.env = staging_env()
+        self.cfg = _sqlite_testing_config()
+
+        # a -> b (head)
+        #   -> c (head)
+        self.a = util.rev_id()
+        self.b = util.rev_id()
+        self.c = util.rev_id()
+        for rev, down_rev, msg, table in [
+            (self.a, None, "base", "base_t"),
+            (self.b, self.a, "branch one", "branch_one_t"),
+            (self.c, self.a, "branch two", "branch_two_t"),
+        ]:
+            script = ScriptDirectory.from_config(self.cfg)
+            script.generate_revision(
+                rev, msg, refresh=True, head=down_rev or "base", splice=True
+            )
+            write_script(
+                script,
+                rev,
+                f"""\
+"{msg}"
+revision = '{rev}'
+down_revision = {repr(down_rev)}
+
+from alembic import op
+
+
+def upgrade():
+    op.execute("CREATE TABLE {table} (id INTEGER)")
+
+
+def downgrade():
+    op.execute("DROP TABLE {table}")
+
+""",
+            )
+
+    def tearDown(self):
+        clear_staging_env()
+
+    def _tables(self):
+        from sqlalchemy import inspect as sa_inspect
+
+        with self.bind.connect() as conn:
+            return set(sa_inspect(conn).get_table_names())
+
+    def _versions(self):
+        with self.bind.connect() as conn:
+            return {
+                row[0]
+                for row in conn.execute(
+                    text("select version_num from alembic_version")
+                )
+            }
+
+    def test_upgrade_head_with_two_heads_fails(self):
+        # the original problem: with two heads, "head" is ambiguous
+        with expect_raises_message(
+            util.CommandError, "Multiple head revisions are present"
+        ):
+            command.upgrade(self.cfg, "head")
+
+    def test_converge_upgrade_runs_unapplied_only(self):
+        # one branch is already applied to the database
+        command.upgrade(self.cfg, self.b)
+        eq_(self._versions(), {self.b})
+        eq_(self._tables(), {"alembic_version", "base_t", "branch_one_t"})
+
+        command.converge(self.cfg, rev_id="converge_rev")
+        command.upgrade(self.cfg, "head")
+
+        # the other branch and the merge revision ran; the already
+        # applied revisions were not re-run, otherwise the CREATE TABLE
+        # statements for base_t / branch_one_t would have failed
+        eq_(self._versions(), {"converge_rev"})
+        eq_(
+            self._tables(),
+            {"alembic_version", "base_t", "branch_one_t", "branch_two_t"},
+        )
+
+    def test_converge_upgrade_from_base(self):
+        command.converge(self.cfg, rev_id="converge_rev")
+        command.upgrade(self.cfg, "head")
+        eq_(self._versions(), {"converge_rev"})
+        eq_(
+            self._tables(),
+            {"alembic_version", "base_t", "branch_one_t", "branch_two_t"},
+        )
+
+    def test_converge_downgrade_roundtrip(self):
+        command.converge(self.cfg, rev_id="converge_rev")
+        command.upgrade(self.cfg, "head")
+        eq_(self._versions(), {"converge_rev"})
+
+        # full rollback through the merge point and both branches
+        # still works
+        command.downgrade(self.cfg, "base")
+        eq_(self._tables(), {"alembic_version"})
+
+        # and the converged line can be upgraded again
+        command.upgrade(self.cfg, "head")
+        eq_(self._versions(), {"converge_rev"})
+        eq_(
+            self._tables(),
+            {"alembic_version", "base_t", "branch_one_t", "branch_two_t"},
+        )
+
+
 class CurrentTest(_BufMixin, TestBase):
     @classmethod
     def setup_class(cls):

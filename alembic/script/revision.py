@@ -173,6 +173,28 @@ class RevisionMap:
         self._revision_map
         return self._real_heads
 
+    def get_convergence_heads(self) -> tuple[str, ...]:
+        """Return the head revisions that a convergence revision would join.
+
+        A convergence revision is a merge point that joins all current
+        heads, so that the revision map is left with a single head.
+        Convergence only ever *adds* a new revision on top of the
+        existing heads; no existing revision is modified, so the
+        migration history and the ability to downgrade back to the
+        individual heads are fully preserved.
+
+        The heads are returned in the deterministic order in which they
+        were collected from the revision map.  If the map has exactly
+        one head it is already converged and a one-element tuple is
+        returned; if the map has no revisions, an empty tuple is
+        returned.
+
+        .. versionadded:: 1.21
+
+        """
+        self._revision_map
+        return self.heads
+
     @util.memoized_property
     def _real_bases(self) -> tuple[str, ...]:
         """All "real" base revisions as strings.

@@ -259,6 +259,39 @@ With a single ``head`` target, a generic ``upgrade`` can proceed::
   would occur before the other, thus being incompatible with databases that
   were present on the other migration.
 
+Converging Branches
+-------------------
+
+The most common way multiple heads come about is parallel development:
+two source branches each add a migration against the same parent, and when
+the source branches are merged, the migration graph is left with two heads.
+In this state, a plain ``alembic upgrade head`` refuses to run, and upgrading
+towards only one of the heads means the migrations on the other branch are
+never applied.
+
+The ``alembic converge`` command resolves this condition in one step.  It
+creates a merge-point revision that joins *all* current heads, leaving the
+revision map with a single head::
+
+    $ alembic converge
+    Converging 2 heads: ae1027a6acf, 27c6a30d7c24
+      Generating /path/to/foo/versions/53fffde5ad5_converge_heads.py ... done
+
+The command accepts the same ``-m``/``--message``, ``--rev-id`` and
+``--branch-label`` options as other revision-generating commands; if the
+message is omitted, a generic "converge heads" message is used.  If the
+script directory already has a single head, ``converge`` is a no-op.
+
+Convergence only ever *adds* a new revision file; no existing migration
+file is modified, so the migration history is preserved.  When the
+database is subsequently upgraded, revisions that were already applied
+are not run again - only the migrations that have not been applied yet,
+plus the empty merge-point revision itself, are executed.  The merge
+point is a regular migration file, so downgrading past it returns the
+database to the individual branch heads as with any other merge.
+
+.. versionadded:: 1.21
+
 Working with Explicit Branches
 ------------------------------
 

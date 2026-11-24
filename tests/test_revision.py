@@ -203,6 +203,43 @@ class APITest(TestBase):
         eq_(repr(c), "Revision('c', None, dependencies=('a', 'b'))")
 
 
+class ConvergenceHeadsTest(TestBase):
+    def test_no_revisions(self):
+        map_ = RevisionMap(lambda: [])
+        eq_(map_.get_convergence_heads(), ())
+
+    def test_single_head_already_converged(self):
+        map_ = RevisionMap(
+            lambda: [
+                Revision("a", ()),
+                Revision("b", ("a",)),
+                Revision("c", ("b",)),
+            ]
+        )
+        eq_(map_.get_convergence_heads(), ("c",))
+
+    def test_two_heads(self):
+        map_ = RevisionMap(
+            lambda: [
+                Revision("a", ()),
+                Revision("b", ("a",)),
+                Revision("c", ("a",)),
+            ]
+        )
+        eq_(map_.get_convergence_heads(), ("b", "c"))
+
+    def test_merge_point_converges_to_single_head(self):
+        map_ = RevisionMap(
+            lambda: [
+                Revision("a", ()),
+                Revision("b", ("a",)),
+                Revision("c", ("a",)),
+                Revision("merge", ("b", "c")),
+            ]
+        )
+        eq_(map_.get_convergence_heads(), ("merge",))
+
+
 class DownIterateTest(TestBase):
     def _assert_iteration(
         self,

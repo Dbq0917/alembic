@@ -443,6 +443,76 @@ def merge(
     )
 
 
+def converge(
+    config: Config,
+    message: str | None = None,
+    branch_label: _RevIdType | None = None,
+    rev_id: str | None = None,
+) -> Script | None:
+    """Converge multiple heads into a single head.
+
+    This resolves the "multiple heads" condition that occurs when two
+    source branches each added migrations in parallel and were then
+    merged together.  A new merge-point revision is created that joins
+    all current heads, leaving the revision map with a single head so
+    that ``alembic upgrade head`` applies every outstanding migration
+    in one run.
+
+    Only a single new revision file is added; no existing revision file
+    is modified, so migration history is preserved and the new merge
+    point can be downgraded to get back to the individual heads.
+    Revisions that were already applied to the database are not
+    re-run; only migrations that have not been applied yet are
+    executed on upgrade.
+
+    If the script directory already has a single head, no revision is
+    created and ``None`` is returned.
+
+    :param config: a :class:`.Config` instance
+
+    :param message: string message to apply to the revision.  Defaults
+     to a generic "converge heads" message.
+
+    :param branch_label: string label name to apply to the new revision.
+
+    :param rev_id: hardcoded revision identifier instead of generating a
+     new one.
+
+    .. versionadded:: 1.21
+
+    .. seealso::
+
+        :ref:`branches`
+
+    """
+
+    script = ScriptDirectory.from_config(config)
+    heads = script.revision_map.get_convergence_heads()
+
+    if not heads:
+        raise util.CommandError(
+            "No revision files were found; nothing to converge."
+        )
+
+    if len(heads) == 1:
+        config.print_stdout(
+            "Only a single head %s is present; nothing to converge." % heads[0]
+        )
+        return None
+
+    config.print_stdout(
+        "Converging %d heads: %s" % (len(heads), util.format_as_comma(heads))
+    )
+
+    return merge(
+        config,
+        list(heads),
+        message=message if message is not None else "converge heads",
+        branch_label=branch_label,
+        rev_id=rev_id,
+    )
+
+
 def upgrade(
     config: Config,
     revision: str,
